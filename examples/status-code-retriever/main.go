@@ -4,7 +4,10 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/gorilla/mux"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -28,6 +31,7 @@ func init() {
 	}
 
 	router.HandleFunc("/", ShowSchema).Methods("OPTIONS")
+	router.HandleFunc("/", RetrieveStatusCode).Methods("POST")
 
 	http.Handle("/", router)
 }
@@ -38,6 +42,49 @@ func main() {
 
 func ShowSchema(w http.ResponseWriter, r *http.Request) {
 	w.Write(BLOCK_DEFINITION)
+}
+
+// RetrieveStatusCode expects {"inputs": {"url": "http://..."}} and
+// returns the status code retrieved by visiting the given URL
+func RetrieveStatusCode(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Read Request
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		// Bad Request
+		log.Printf("Error at %s: %v\n", r.URL, err)
+		http.Error(w, `{"outputs": []}`, 400)
+		return
+	}
+	defer r.Body.Close()
+
+	// Parse JSON
+	input := URLInput{}
+	if err := json.Unmarshal(body, &input); err != nil {
+		// Bad Request
+		log.Printf("Error at %s: %v\n", r.URL, err)
+		http.Error(w, `{"outputs": []}`, 400)
+		return
+	}
+
+	// Perform HTTP request for user
+	resp, err := http.Get(input.Inputs.URL)
+	if err != nil {
+		// Something weird happened...
+		log.Printf("Error at %s: %v\n", r.URL, err)
+		http.Error(w, `{"outputs": []}`, 500)
+		return
+	}
+	defer resp.Body.Close()
+
+	fmt.Fprintf(w, `{"outputs": [{"status_code": %d}]}`, resp.StatusCode)
+}
+
+type URLInput struct {
+	Inputs struct {
+		URL string `json:"url"`
+	} `json:"inputs"`
 }
 
 func serve(handler http.Handler) {
