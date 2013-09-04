@@ -7,18 +7,26 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
 const (
-	LISTEN_ADDR = ":8080"
+	DEFAULT_LISTEN_ADDR = ":8080"
 )
 
 var (
+	// `PORT` environment var used by Heroku
+	LISTEN_ADDR = ":" + os.Getenv("PORT")
+
 	router = mux.NewRouter()
 )
 
 func init() {
+	if LISTEN_ADDR == ":" {
+		LISTEN_ADDR = DEFAULT_LISTEN_ADDR
+	}
+
 	router.HandleFunc("/", ShowSchema).Methods("OPTIONS")
 
 	http.Handle("/", router)
