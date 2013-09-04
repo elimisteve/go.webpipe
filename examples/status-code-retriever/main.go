@@ -41,6 +41,7 @@ func main() {
 }
 
 func ShowSchema(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write(BLOCK_DEFINITION)
 }
 
