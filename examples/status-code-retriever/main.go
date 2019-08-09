@@ -1,52 +1,46 @@
-// Steve Phillips / elimisteve
-// 2013.09.03
-
 package main
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gorilla/mux"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gorilla/mux"
 )
 
-const (
-	DEFAULT_LISTEN_ADDR = ":8080"
-)
-
-var (
-	// `PORT` environment var used by Heroku
-	LISTEN_ADDR = ":" + os.Getenv("PORT")
-
-	router = mux.NewRouter()
-)
-
-func init() {
-	if LISTEN_ADDR == ":" {
-		LISTEN_ADDR = DEFAULT_LISTEN_ADDR
+func main() {
+	listenPort := "8080"
+	if envPort := os.Getenv("PORT"); envPort != "" {
+		listenPort = envPort
 	}
+
+	router := mux.NewRouter()
 
 	router.HandleFunc("/", ShowSchema).Methods("OPTIONS")
 	router.HandleFunc("/", RetrieveStatusCode).Methods("POST")
 
 	http.Handle("/", router)
+
+	server := &http.Server{
+		Addr:           ":" + listenPort,
+		Handler:        router,
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		MaxHeaderBytes: 1 << 20,
+	}
+	log.Printf("HTTP server trying to listen on %s...\n", server.Addr)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("HTTP listen failed: %v\n", err)
+	}
 }
 
-func main() {
-	serve(router)
-}
-
-func ShowSchema(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(BLOCK_DEFINITION)
-}
-
-// RetrieveStatusCode expects {"inputs": {"url": "http://..."}} and
-// returns the status code retrieved by visiting the given URL
+// RetrieveStatusCode expects a POST body containing {"inputs":
+// {"url": "http://..."}} and returns the status code retrieved by
+// visiting the given URL
 func RetrieveStatusCode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -88,21 +82,11 @@ type URLInput struct {
 	} `json:"inputs"`
 }
 
-func serve(handler http.Handler) {
-	server := &http.Server{
-		Addr:           LISTEN_ADDR,
-		Handler:        handler,
-		ReadTimeout:    30 * time.Second,
-		WriteTimeout:   30 * time.Second,
-		MaxHeaderBytes: 1 << 20,
-	}
-	log.Printf("HTTP server trying to listen on %s...\n", server.Addr)
-	if err := server.ListenAndServe(); err != nil {
-		log.Printf("HTTP listen failed: %v\n", err)
-	}
-}
-
-var BLOCK_DEFINITION = []byte(`
+// ShowSchema responds to an OPTIONS request with the JSON schema
+// describing this service.
+func ShowSchema(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`
 {
   "name": "HTTP Status Code Retriever",
   "url": "http://status-code-retriever.herokuapp.com",
@@ -118,4 +102,5 @@ var BLOCK_DEFINITION = []byte(`
       "description": "HTTP status code returned by given URL."
   }
 }
-`)
+`))
+}
